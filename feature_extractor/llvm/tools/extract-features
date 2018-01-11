@@ -1,0 +1,246 @@
+#!/bin/bash
+
+###############################################################################
+# Configuration
+###############################################################################
+
+VERBOSE=0
+DO_IR=1
+DO_AST=0
+SAVE_BC=0
+SAVE_LLVM=0
+ADD_CL_INC=0
+DO_ADDRSPACE=0
+
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+FE_BUILD=`ls $SCRIPT_DIR/.. | grep Release*`
+FE_BUILD_DIR=`readlink -f $SCRIPT_DIR/../$FE_BUILD/lib`
+WORKING_DIR=$SCRIPT_DIR
+LIBCLC_DIR=/usr/local/libclc
+POCL_INC=/usr/local/share/pocl/include
+CONFIG_FILE=""
+
+CC_ARGS="-emit-llvm -c"
+OPT_ARGS="-loops -inline -always-inline"
+AST_PASS_ARGS="-Xclang -load -Xclang $FE_BUILD_DIR/ast_pass.so -Xclang -plugin -Xclang coa-mem"
+IR_PASS_ARGS="-load $FE_BUILD_DIR/ir_pass.so -irfeatures $BC_FILE"
+EXTRA_ARGS=""
+
+RM_FILES=""
+
+SRC=""
+BC_FILE=""
+
+###############################################################################
+# Helper functionality
+###############################################################################
+
+function print_help {
+	echo "extract-features: driver script to extract execution features from C/C++/OpenCL code"
+	echo
+	echo "This script can extract features from the AST & IR forms of the code.  It generates LLVM byte-code from the source file using clang/opt"
+	echo
+	echo "Usage: ./extract-features [ extraction options ] <source file> [ CC options ]"
+	echo "Options:"
+	echo -e "\t -h                : print help & exit"
+	echo -e "\t -c <config file>  : read in tool configuration from config file"
+	echo -e "\t -ir               : extract IR features from source (default)"
+	echo -e "\t -no-ir            : do NOT extract IR features from source"
+	echo -e "\t -ast              : extract AST features from source (not yet implemented!)"
+	echo -e "\t -no-ast           : do NOT extract AST features from source (default)"
+	echo -e "\t -save-bc          : save generated LLVM bytecode"
+	echo -e "\t -save-llvm        : save human-readable LLVM bytecode"
+	echo -e "\t -pocl <directory> : directory containing pocl include files (default is $POCL_INC)"
+	echo -e "\t -addrspace        : generate address space-specific features"
+	echo -e "\t -clc <directory>  : tell the tool where libclc is located, used when generating address space features (default is $LIBCLC_DIR)"
+	echo -e "\t -v                : be verbose (print commands)"
+	echo
+	echo "Note: any other arguments will be passed to clang to generate bytecode, allowing you to pass locations, flags, etc."
+	echo
+	echo "Tips:"
+	echo -e "\t1. Use optimizations, as the OpenCL compiler has optimizations enabled by default, meaning that the code that has features extracted is more like OpenCL compiler-generated code.  Additionally, it helps solve known issues with basic block execution counts determined by heuristics (for more info, look at \"lib/ir_pass/HeuristicAnnotator.h\")."
+	echo -e "\t2. Obviously all errors should be fixed, but also fix any warnings.  Some of these may cause problems in analysis passes"
+	echo -e "\t3. You can specify all of the above options (except source files & extra command-line options) via a config file, passed in with -c"
+	exit 0
+}
+
+function parse_config_file {
+	local fname=$1
+	while read p; do
+		case $p in
+			ir*)
+				DO_IR=1 ;;
+			no-ir*)
+				DO_IR=0 ;;
+			ast*)
+				DO_AST=1 ;;
+			no-ast*)
+				DO_AST=0 ;;
+			save-bc*)
+				SAVE_BC=1 ;;
+			save-llvm*)
+				SAVE_LLVM=1 ;;
+			pocl*)
+				POCL_INC=${p#pocl} ;;
+			addrspace*)
+				DO_ADDRSPACE=1 ;;
+			clc*)
+				LIBCLC_DIR=${p#clc} ;;
+			v*)
+				VERBOSE=1 ;;
+			*)
+				die "unknown configuration option \"$p\" in $fname" ;;
+		esac
+	done < $fname
+}
+
+# Must ALWAYS be called if running the IR pass, since plugins in clang prevent
+# bitcode generation
+function generate_bc_file {
+	if [ $VERBOSE -eq 1 ]; then
+		echo "clang $CC_ARGS -o $BC_FILE $SRC"
+		if [ $SAVE_LLVM -eq 1 ]; then
+			echo "llvm-dis -o ${BC_FILE/%.bc/.ll} $BC_FILE"
+		fi
+	fi
+
+	clang $CC_ARGS -o $BC_FILE $SRC || die "could not generate .bc file" "are you sure that the pocl include folder is correct (set to $POCL_INC)?"
+	if [ $SAVE_LLVM -eq 1 ]; then
+		llvm-dis -o ${BC_FILE/%.bc/.ll} $BC_FILE || die "could not generate.ll file"
+	fi
+
+	if [ $SAVE_BC -eq 0 ]; then
+		RM_FILES="$RM_FILES $BC_FILE"
+	fi
+}
+
+# If you load a plugin, you cannot generate output, hence generate_bc_file needs
+# to ALWAYS be called
+function generate_ast_features {
+#	if [ $VERBOSE -eq 1 ]; then
+#		echo "clang $CC_ARGS $AST_PASS_ARGS -o $BC_FILE $SRC"
+#	fi
+
+#	clang $CC_ARGS $AST_PASS_ARGS $SRC || die "could not generate .bc file" "are you sure that the pocl include folder is correct (set to $POCL_INC)?"
+	die "AST pass is not yet implemented!"
+}
+
+function generate_ir_features {
+	if [ $VERBOSE -eq 1 ]; then
+		echo "opt $OPT_ARGS $IR_PASS_ARGS $BC_FILE"
+		opt $OPT_ARGS $IR_PASS_ARGS $BC_FILE || die "could not run IR pass"
+	else
+		opt $OPT_ARGS $IR_PASS_ARGS $BC_FILE > /dev/null || die "could not run IR pass"
+	fi
+}
+
+function cleanup {
+	for file in $RM_FILES; do
+		if [ $VERBOSE -eq 1 ]; then
+			echo "rm $file"
+		fi
+		rm $file
+	done
+
+	if [ "`ls *.feat 2> /dev/null`" != "" ]; then
+		local gen_dir=$WORKING_DIR/features
+		if [ ! -d $gen_dir ]; then
+			if [ $VERBOSE -eq 1 ]; then
+				echo "mkdir $gen_dir"
+			fi
+			mkdir $gen_dir
+		fi
+		if [ $VERBOSE -eq 1 ]; then
+			echo "mv *.feat $gen_dir"
+		fi
+		mv *.feat $gen_dir
+	fi
+}
+
+function die {
+	echo "---"
+	echo "Error: $1!"
+	echo "---"
+	if [ "$2" != "" ]; then
+		echo "Note: $2"
+	fi
+	exit 1
+}
+
+###############################################################################
+# Driver code
+###############################################################################
+
+while [ "$1" != "" ]; do
+	case $1 in
+		-h)
+			print_help ;;
+		-c)
+			parse_config_file $2
+			shift ;;
+		-ir)
+			DO_IR=1 ;;
+		-no-ir)
+			DO_IR=0 ;;
+		-ast)
+			DO_AST=1 ;;
+		-no-ast)
+			DO_AST=0 ;;
+		-save-bc)
+			SAVE_BC=1 ;;
+		-save-llvm)
+			SAVE_LLVM=1 ;;
+		-pocl)
+			POCL_INC=$2
+			shift ;;
+		-addrspace)
+			DO_ADDRSPACE=1 ;;
+		-clc)
+			LIBCLC_DIR=$2
+			shift ;;
+		-v)
+			VERBOSE=1 ;;
+		*.c)
+			SRC=$1
+			BC_FILE="$WORKING_DIR/`basename ${SRC/%.c/.bc}`" ;;
+		*.cpp)
+			SRC=$1
+			BC_FILE="$WORKING_DIR/`basename ${SRC/%.cpp/.bc}`" ;;
+		*.cl)
+			SRC=$1
+			BC_FILE="$WORKING_DIR/`basename ${SRC/%.cl/.bc}`" ;;
+		*)
+			EXTRA_ARGS="$EXTRA_ARGS $1" ;;
+	esac
+	shift
+done
+
+if [ $DO_ADDRSPACE -eq 1 ]; then
+	CC_ARGS="-Dcl_clang_storage_class_specifiers -Dcl_khr_fp64 -isystem $LIBCLC_DIR/generic/include -include clc/clc.h -target nvptx -xcl -emit-llvm -c"
+else
+	CC_ARGS="$CC_ARGS -I$POCL_INC"
+	# Add pocl header to eliminate compiler warnings/errors
+	if [ "`grep \"_kernel.h\" $SRC`" == "" ] || [ "`grep \"pocl*h\" $SRC`" == "" ]; then
+		NEW_SRC="$WORKING_DIR/`basename ${SRC/%.cl/_tmp.cl}`"
+		echo -e "#include \"_kernel.h\"\n" > $NEW_SRC
+		cat $SRC >> $NEW_SRC
+		SRC="$NEW_SRC"
+		ADD_CL_INC=1
+		RM_FILES="$RM_FILES $SRC"
+	fi
+fi
+
+# Add other supplied arguments
+CC_ARGS="$CC_ARGS $EXTRA_ARGS"
+
+if [ $DO_AST -eq 1 ]; then
+	generate_ast_features
+fi
+
+if [ $DO_IR -eq 1 ]; then
+	generate_bc_file
+	generate_ir_features
+fi
+
+cleanup
+

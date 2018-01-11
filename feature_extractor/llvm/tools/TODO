@@ -1,0 +1,4 @@
+1. Address space handling is extremely rough, at best.  The current iteration
+   of this tool uses libclc to specify address spaces.  This support should be
+   rolled into the configure system of the feature extractor (i.e. if the user
+   specifies a libclc, then the feature extractor can track memory spaces)

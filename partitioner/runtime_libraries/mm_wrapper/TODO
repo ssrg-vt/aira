@@ -1,0 +1,1 @@
+1. When tree is destroyed, empty it first in case we miss unregistering any pointers

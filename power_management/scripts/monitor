@@ -1,0 +1,99 @@
+#!/bin/bash
+
+DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+PERIOD=16
+VERBOSE=""
+
+PIDFILE="/var/run/PowerManager_Monitoring.pid"
+LOGFILE="/var/run/PowerManager_Monitoring.txt"
+
+function print_help {
+	echo "monitor - manage PowerManager power monitoring daemon"
+	echo
+	echo "Usage: monitor <action> [ OPTIONS ]"
+	echo
+	echo "Actions:"
+	echo "  start : start the daemon"
+	echo "  stop  : stop an already running daemon"
+	echo
+	echo "Options:"
+	echo "  -p <number> : power monitoring period, in ms (default is $PERIOD)"
+	echo "  -v          : verbose logging in the daemon"
+	echo "  -h | --help : print help & exit"
+}
+
+if [ "$1" == "-h" ] || [ "$1" == "--help" ]; then
+	print_help
+	exit 0
+fi
+
+ACTION=$1
+shift
+
+if [ "$ACTION" != "start" ] && [ "$ACTION" != "stop" ]; then
+	echo "Please specify an action!"
+	print_help
+	exit 1
+fi
+
+while [ "$1" != "" ]; do
+	case $1 in
+		-p)
+			PERIOD=$2
+			shift ;;
+		-v)
+			VERBOSE="-v" ;;
+		-h|--help)
+			print_help
+			exit 0 ;;
+		*)
+			echo "Unknown argument \"$1\"" ;;
+	esac
+	shift
+done
+
+if [ "$ACTION" == "start" ] || [ "$ACTION" == "stop" ]; then
+	if [[ $EUID -ne 0 ]]; then
+		echo "Must be root to start/stop the daemon!"
+		exit 1
+	fi
+fi
+
+if [ "$ACTION" == "start" ]; then
+	echo "-> Starting power monitoring daemon <-"
+
+	# Is monitor already running?
+	if [ -f "$PIDFILE" ]; then
+		echo "Power monitor appears to be running! (check for PID `cat $PIDFILE`)"
+		exit 1
+	fi
+
+	# Has PowerManager/monitor been built?
+	if [ ! -f "$DIR/../bin/PowerManager" ]; then
+		echo "Please build PowerManager from the root directory before starting daemon!"
+		exit 1
+	fi
+
+	$DIR/../bin/PowerManager -d $PERIOD $VERBOSE
+elif [ "$ACTION" == "stop" ]; then
+	echo "-> Stopping power monitoring daemon <-"
+
+	# Is monitor running?
+	if [ ! -f "$PIDFILE" ]; then
+		echo "Cannot find file containing daemon's PID...are you sure the daemon is running?"
+		exit 1
+	fi
+
+	kill -10 `cat $PIDFILE`
+	sleep 0.5
+	if [ -f "$PIDFILE" ]; then
+		# Daemon didn't exit cleanly
+		echo "WARNING: daemon crashed (cleaning up)"
+		rm $PIDFILE
+	fi
+	if [ -f "$LOGFILE" ]; then
+		# If we know where the log file is, move it here
+		mv $LOGFILE $DIR
+	fi
+fi
+

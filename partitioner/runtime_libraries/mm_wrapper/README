@@ -1,0 +1,93 @@
+Partitioner Memory Management Wrapper
+-----
+This memory management wrapper is necessary for the partitioner to function
+correctly.
+
+When partitioning code, we need to exchange inputs/outputs between the
+different partitions (a.k.a., function arguments, return values and global
+values).  We are fundamentally limited at compile time in determining how much
+data is passed between functions.  Consider the following example where a
+function sums an array:
+
+int arraySum(int* array, int numElements) {
+	int i = 0, sum = 0;
+	for(i = 0; i < numElements; i++)
+		sum += array[i];
+	return sum;
+}
+
+Assume this function is called from main, where the number of elements is read
+and the data in the array is filled from a file.  In this situation, the
+program would most likely use 'malloc' to allocate the array on the heap.  At
+compile time, we have no knowledge of how big the array is and how much data
+must be transferred (although admittedly in this example if we did some
+analysis we could discover that numElements integers needed to be transferred).
+To avoid this issue, we wrap the libc memory management functions 'malloc',
+'calloc', 'realloc' and 'free'; additionally we add calls to store sizes of
+statically allocated memroy.  This allows us to determine at runtime how
+much data needs to be transferred between partitions.  We do this by storing
+the pointer and the size of the block pointed to by the pointer in a tree,
+allowing for efficient retrieval at runtime.
+-----
+Building the wrapper
+
+To build the wrapper, type the following command:
+
+$: make
+
+This creates a shared library 'libmm_wrapper.so' that can be linked into your
+program.
+-----
+Adding the wrapper to your code
+
+There are two steps to link your code to the wrapper.  First, we must link the
+shared library against your code so that its functionality is used in your
+program.  There are two ways of doing this:
+
+1.  Copy the library into the default library search paths
+
+You can copy the library into a directory that the linker/loader already searches.
+For example, on Ubuntu you would copy the library into '/usr/lib' where both
+the linker and the loader already search for shared libraries.  Once you have
+copied the library into an appropriate directory, add the following switch to
+your linking step in the compilation process (the "$(WRAP)" variable is discussed
+below):
+
+$: gcc $(WRAP) <arguments> <source files> -lmm_wrapper
+
+Your program is now linked against the memory management wrappers.
+
+2.  Add the location of the library into the linker and loader search paths
+
+If you don't want to add the library to a default search path, tell the linker
+and loader where to look using the following steps (again, "$(WRAP)" is discussed
+below):
+
+	1. Tell GCC (the linker) where to look for the library 
+	    gcc $(WRAP) <arguments> <source files> -L<location of library> -lmm_wrapper
+
+	2. Tell the loader where to look for the library
+	    $: export LD_LIBRARY_PATH:<location of library>:$LD_LIBRARY_PATH
+
+For example, if I copy the library to my program's directory, I would do the
+following:
+
+$: gcc -o myprogram -L. $(WRAP) myprogram.c -lmm_wrapper
+$: export LD_LIBRARY_PATH=`pwd`:$LD_LIBRARY_PATH
+
+We use the wrapping functionality of ld to convert calls to the traditional libc
+functions into calls to our wrapper (see the unix man pages for more
+information).  In the makefile, you will see a variable called "WRAP" - this
+equates to adding the following switches to the gcc invocation:
+
+$: gcc -o myprogram -L. -Wl,-wrap,malloc -Wl,-wrap,calloc -Wl,-wrap,realloc \
+		-Wl,-wrap,free myprogram.c -lmm_wrapper
+
+Similary, when compiling with nvcc use the "CUDA_WRAP" variable defined in the makefile,
+which equates to adding the following switches:
+
+$: nvcc -o myprogram -L. -Xlinker "-wrap" -Xlinker "malloc" -Xlinker "-wrap" \
+		-Xlinker "calloc" -Xlinker "-wrap" -Xlinker "realloc" -Xlinker "-wrap" \
+		-Xlinker "free" myprogram.cu -lmm_wrapper
+
+Your program is now linked against the memory management wrappers.

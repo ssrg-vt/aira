@@ -1,0 +1,115 @@
+///////////////////////////////////////////////////////////////////////////////
+// Things to-do for the partitioner:
+///////////////////////////////////////////////////////////////////////////////
+
+1. Insert OpenMPI/MM Wrapper/Scheduler headers in the correct files
+	-This includes inserting mm_wrapper.h into kernel launch files
+
+2. Smarter detection of side-effects in sub-calls.  Right now, if one of the
+   kernel's inputs is used in a function call, it is assumed that input will
+   have side-effects and needs to be transferred back to the host.
+
+3. Change driver script so that output is more logically organized in folders
+   rather than making file names ridiculously long.
+
+4. Finish implementing all possible MPI types for data transfer:
+	MPI_C_FLOAT_COMPLEX
+	MPI_C_DOUBLE_COMPLEX
+	MPI_C_LONG_DOUBLE_COMPLEX
+	MPI_C_BOOL
+	MPI_INT8_T
+	MPI_INT16_T
+	MPI_INT32_T
+	MPI_INT64_T
+	MPI_UINT8_T
+	MPI_UINT16_T
+	MPI_UINT32_T
+	MPI_UINT64_T
+	MPI_BYTE
+	MPI_PACKED
+
+5. Cleanup:
+	-Comment/document all functions
+	-make debug info consistent (especially in terms of spacing)
+
+6. Remove typedefs -> IN PROGRESS (in cleanup_code pass)
+
+7. Find side-effects for pointers/arrays whose address is used in some
+	 expression
+
+8. Use the AST merge tools to combine definitions from multiple files or find
+   a smarter way of finding definitions
+
+9. Handle return values
+
+10. Fix finding MPI defined datatypes when they aren't in the same file
+
+11. Register/unregister pointers inside the same scope (rather than simply
+		unregistering at end of the function)
+		-May want to use when it goes out of scope to determine if it should
+		 be registered at all
+
+12. Strip const type from function parameters
+
+13. Handle pointers-to-middle (i.e. use get_pointer, calculate offset + send)
+
+14. When calculating work items, only subtract if nonzero
+   -In particular, casts like ((unsigned int)0) are not recognized as being zero
+
+15. In partition_kernels pass, avoid re-inserting struct & func definitions
+
+16. Put prototypes of helper functions into partitions, so ordering isn't an
+	  issue
+
+17. Don't register/unregister pointers within a kernel
+
+18. Sometimes the wrong version of a function gets copied to a partition (look
+		into SGEMM in Parboil)
+
+19. When registering scalars, register the sizeof their type, NOT 1UL!
+		Additionally, when calculating data transfers, should be sizeof type not 1
+
+///////////////////////////////////////////////////////////////////////////////
+// Limitations
+///////////////////////////////////////////////////////////////////////////////
+
+1. We currently only support C, although C++ and Fortran are on our to-do list.
+
+2. Currently, a function declaration without a function definition cannot be
+   on a partition boundary.  If we cannot see the definition, then we cannot
+   insert the appropriate communication calls to transfer inputs/outputs to/from
+   the function on a separate partition.  However, there is still the potential
+   for these functions to be called from the other partition.  For example:
+
+	int myFunction() {
+		printf("Hello!\n");
+	}
+
+   The "printf" function cannot be on the partition boundary (i.e. it cannot be
+   a function that is chosen to be partitioned).  However, if the function is
+   defined by some library on the accelerator (called a "white-listed" function),
+   and a function that is partitioned calls this library function, then this is
+   allowed.
+
+3. We currently do not support kernels that use higher-dimensional pointers
+   (i.e. int*** my_pointer).  Note that we DO support multi-dimensional arrays.
+	-Need to check on multi-dimensional array support
+
+4. We currently use OpenMPC to perform OpenMP-to-CUDA translation.
+
+///////////////////////////////////////////////////////////////////////////////
+// ROSE Limitations
+///////////////////////////////////////////////////////////////////////////////
+
+1. ROSE cannot transform or generate code in any header filer.  In fact, EDG
+   will throw processing errors if a header file is included.
+
+2. Inserting headers seems to be random as to whether or not it will work.
+
+3. Calling "getArrayElementCount" failed for b+tree in Rodinia when "indices"
+   was declared using the "DEFAULT_ORDER" macro, however when it was explicityly
+   defined using a number, it worked.  Defining "keys" with this macro did not
+   produce any errors
+
+	-Similarly, when array size was declared with a constant expression (something
+	 like 2 * (1 << 16)), getArrayElementCount failed

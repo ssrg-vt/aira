@@ -1,0 +1,73 @@
+DISCLAIMER - a lot of these are blatantly stolen from literature/Michael.  I've
+added a few, clarified some and added some thoughts.
+
+I've organized these into main areas that I think are important for
+characterization.  Obviously a lot of these will have to scaled at runtime, or
+are completely dynamic.  I don't see any blatant problems with how these could
+be collected & scaled, but I haven't thought very hard about it.  There is a small
+section at the bottom with other random thoughts that have popped into my head.
+
+1. General program characteristics
+	a. Number of instructions
+	b. Number of scalar integer math operations
+	c. Number of vector integer math operations
+	d. Number of scalar floating-point math operations
+		-May want to differentiate between single & double precision
+	e. Number of vector floating-point math operations
+	f. Number of scalar logic operations (bitwise & boolean)
+	g. Number of vector logic operations
+	h. Number of memory loads/stores
+	i. Number of instrinsic math operations
+	
+2. Memory access patterns
+	a. Percent of memory accesses that are coalesced
+		-Initially, as simple as checking for a step size of 1:
+			for(i = 0; i < num_elems; i++)
+				a[i] = ...
+				
+				vs.
+				
+			for(i = 0; i < num_elems; i += 2)
+				a[i] = ...
+					
+	b. Amount of private memory needed
+	c. Amount of shared memory needed
+	d. Ratio of memory accesses/computation
+
+3. Control flow
+	a. Control flow paths per work item
+	
+4. Available parallelism
+	a. Number of work items available
+		-In OpenMP, this could be a single loop iteration (pragma omp for) or a
+			task (pragma omp task/pragma omp section)
+		-In CUDA/OpenCL, this is a single kernel instance (i.e. a single thread)
+	c. Number of synchronization operations (barriers, mutexes, etc.) per work
+		item
+		
+5. System Parameters
+	a. Number of processors/architecture
+		-# of CPUs (CPU + Tilera)
+		-# of SMs * # of ALUs/SM (GPU)
+		-# of LEs (FPGAs)
+	b. Amount of memory/architecture
+
+6. Runtime
+	a. Amount of memory to transfer/work item
+		
+Other ideas:
+-Can we extract the granularity of parallelism?
+	-Optional hints from the developer?
+		#pragma popcorn type task_parallel
+		#pragma popcorn type data_parallel
+-Can we greedily eliminate features?
+-Should we only collect features within OpenMP parallel blocks?  (I think we
+	should, as we are focused on the kernel and not the entire application)
+	-Maybe already handled by per-function features/correlation
+	-Should we throw out other functions that don't concern us?
+-Can we classify memory accesses that are "regular" vs. "random"?
+	-Memory accesses based on for-loop (or other similarly structured loop)
+	iterator or variable, struct/class member accesses vs. other (or indirect)
+	accesses.  E.g., for an indirect access:
+		for(i = 0; i < num_elems; i++)
+			value = b[a[i]];

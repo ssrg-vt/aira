@@ -1,0 +1,26 @@
+Support for triggering power logging using a parallel I/O port
+--------------------------------------------------------------
+
+This library & executable provide the ability to programmatically trigger
+logging using a parallel I/O interface.
+
+Implementation: // TODO is this correct?
+The low-level details are included in the library.  Triggering happens using
+the interface's data lines -- the library pulls all data pins high, leaves them
+high for ? microseconds, then pulls them low again.
+
+// TODO power_trigger binary.  Is it a daemon, or does it need to just pull the
+// line high for a millisecond?
+
+Usage
+-----
+
+Physical:
+Developed for use with the NI DAQmx.  Attach a line from one of the data pins
+to the digital trigger channel being monitored by the DAQmx/data acquisition
+software.
+
+TODO
+----
+1. Does line need to be kept high to enable logging?
+	- If so, need to convert binary into 

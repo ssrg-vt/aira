@@ -1,0 +1,28 @@
+To build the LLVM pass I currently treat it as an in-tree pass via a symlink.
+This was last tested against LLVM/Clang trunk revision 212187.
+
+  # Modify LLVM build structure to include this pass.
+  cd "$LLVM_SRC_ROOT"/lib/Transforms
+  ln -s "$MKLINUX_COMPILER_GIT"/partitioner/analysis/llvm_pass PTrack
+  vim "$LLVM_SRC_ROOT"/lib/Transforms/Makefile
+    # Add PTrack to PARALLEL_DIRS variable.
+
+  # Recompile LLVM (including this pass).
+  cd "$LLVM_OBJ_ROOT"
+  "$LLVM_SRC_ROOT"/configure --enable-shared --enable-optimized \
+                             --prefix="$LLVM_INSTALL_PATH"
+  make -jN # Pick your N
+  make check-all # Optional
+  make install
+
+Building the stub library is simple.  It is tested against Boost 1.52.0.
+
+  cd "$MKLINUX_COMPILER_GIT"/partitioner/analysis/library
+  make
+  make test # Optional
+
+To make use of these, run.sh should be sufficient, and can be used as a guide
+for how to use the tools when it is not sufficient.
+
+  # Fix LLVM_INSTALL_PATH in run.sh
+  ./run.sh parallel_functions.txt *.c

@@ -1,0 +1,66 @@
+#!/bin/bash
+
+DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+PID_FILE="/var/run/power_trigger.pid"
+ADDRESS="0xd010"
+
+function print_help {
+	echo "trigger_ctl - manage power_trigger (hardware power trigger) daemon"
+	echo
+	echo "Usage: ./trigger_ctl <action> [ OPTIONS ]"
+	echo
+	echo "Actions:"
+	echo "  start-daemon : launch daemon (will wait for signals for triggers)"
+	echo "  start-log    : start logging i.e. pull PIO pins up"
+	echo "  stop-log     : stop logging i.e. pull PIO pins down"
+	echo "  exit-daemon  : tell the daemon to clean up & exit"
+	echo
+	echo "Options:"
+	echo "  -h | --help : print help & exit"
+	echo "  -a address  : parallel port address"
+}
+
+if [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
+	print_help
+	exit 0
+fi
+
+CMD=$1; shift
+
+while [ "$1" != "" ]; do
+	case $1 in
+		-h|--help)
+			print_help ;;
+		-a)
+			ADDRESS=$2
+			shift ;;
+	esac
+	shift
+done
+
+# Check for root
+if [[ $EUID -ne 0 ]]; then
+	echo "This script must be run as root!"
+	exit 1
+fi
+
+# Perform requested action
+if [ "$CMD" == "start-daemon" ]; then
+	if [ ! -f "$DIR/../bin/power_trigger" ]; then
+		echo "Please build power_trigger from the root directory before starting daemon!"
+		exit 1
+	fi
+	$DIR/../bin/power_trigger -a $ADDRESS
+elif [ "$CMD" == "start-log" ]; then
+	kill -10 `cat $PID_FILE`
+elif [ "$CMD" == "stop-log" ]; then
+	kill -12 `cat $PID_FILE`
+elif [ "$CMD" == "exit-daemon" ]; then
+	kill -1 `cat $PID_FILE`
+	rm -f $PID_FILE
+else
+	echo -e "Please specify a valid command!\n"
+	print_help
+	exit 1
+fi
+

@@ -1,0 +1,81 @@
+#!/bin/bash
+
+function print_help {
+	echo "Usage: ./lb-ctrl.sh <start | stop | clear> [ OPTIONS ]"
+	echo ""
+	echo "Options:"
+	echo -e "\t--model <model file>     : model file (usually .xml)"
+	echo -e "\t--trans <transform file> : transform file (usually .xml)"
+	echo -e "\t--predictor <predictor>  : which predictor to use"
+	echo -e "\t--config <config file>   : configuration file"
+	echo -e "\t--no-bg                  : do not launch in the background -- let load-balancer keep control of terminal"
+	echo -e "\t--help                   : print this help"
+	exit 1
+}
+
+if [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
+	print_help
+fi
+
+if [[ $EUID -ne 0 ]]; then
+	echo "This script must be run as root!"
+	exit 1
+fi
+
+CMD=$1; shift
+MODEL="model.xml"
+TRANS="trans.xml"
+PREDICTOR="nn"
+CONFIG="config.xml"
+BG=1
+
+while [[ "$1" != "" ]]; do
+	case $1 in
+		-h | --help)
+			print_help ;;
+		--model)
+			MODEL=$2
+			shift ;;
+		--trans)
+			TRANS=$2
+			shift ;;
+		--predictor)
+			PREDICTOR=$2
+			shift ;;
+		--config)
+			CONFIG=$2
+			shift ;;
+		--no-bg)
+			BG=0 ;;
+	esac
+	shift
+done
+
+# Sanity checks
+case $PREDICTOR in
+	nn | always-cpu | always-gpu | exact-rt | exact-energy | exact-edp)
+		;;
+	*)
+		echo "Unknown predictor '$PREDICTOR'!"
+		print_help ;;
+esac
+
+# Perform requested action
+if [ "$CMD" == "start" ]; then
+	cd ../../load_balancer
+	if [ $BG -eq 1 ]; then
+		./aira-lb -m "$MODEL" -t "$TRANS" -p "$PREDICTOR" -c "$CONFIG" &
+	else
+		./aira-lb -m "$MODEL" -t "$TRANS" -p "$PREDICTOR" -c "$CONFIG"
+	fi
+elif [ "$CMD" == "stop" ]; then
+	kill -1 `cat /var/run/aira-lb.pid` &> /dev/null
+  rm -f /var/run/aira-lb.* &> /dev/null
+	echo "Stopped & cleaned-up load balancer"
+elif [ "$CMD" == "clear" ]; then
+	kill -10 `cat /var/run/aira-lb.pid`
+else
+	echo -e "Please specify a command!\n"
+	print_help
+fi
+

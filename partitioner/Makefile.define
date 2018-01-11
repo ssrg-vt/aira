@@ -1,0 +1,39 @@
+###############################################################################
+# Definitions file for the partitioner built on top of Rose.  You need to     #
+# define several variables in regards to where your Rose installation is      #
+# located:								      #
+#    ROSE_INSTALL_DIR                                                         #
+#    BOOST_INSTALL_DIR                                                        #
+#    JVM_LIB_DIR                                                              #
+# YOU MUST DEFINE THESE FOR YOUR MACHINE/ROSE BUILD IN THIS FILE!             #
+###############################################################################
+
+# Location of Rose build directory after "make install"
+ROSE_INSTALL_DIR	:= /home/rlyerly/Projects/ROSE/install
+
+# Location of Boost build directory (either your native Boost directory or the
+# one built by "build_rose.sh")
+BOOST_INSTALL_DIR	:= /home/rlyerly/Projects/ROSE/boost/install
+
+# Location of Java library directory on your machine
+JVM_LIB_DIR		:= /usr/lib/jvm/java-7-openjdk-amd64/jre/lib/amd64/server
+
+###############################################################################
+
+# Location of include/library directories for Rose and Boost
+ROSE_LIB_DIR		:= -L$(ROSE_INSTALL_DIR)/lib
+ROSE_INCLUDE_DIR	:= -I$(ROSE_INSTALL_DIR)/include -I$(ROSE_INSTALL_DIR)/include/rose
+
+BOOST_INCLUDE_DIR	:= -I$(BOOST_INSTALL_DIR)/include
+BOOST_LIB_DIR		:= -L$(BOOST_INSTALL_DIR)/lib
+BOOST_CPPFLAGS		:= -pthread $(BOOST_INCLUDE_DIR)
+BOOST_LIBS		:= -lboost_date_time -lboost_thread -lboost_program_options \
+                     	   -lboost_regex -lboost_system -lboost_wave \
+			   -lboost_filesystem -lboost_iostreams
+# Generic compiler options
+CXX		  	:= g++
+CPPFLAGS		:= $(BOOST_CPPFLAGS)
+CXXFLAGS		:= -O3 -Wall -Winvalid-pch $(ROSE_INCLUDE_DIR) $(BOOST_INCLUDE_DIR)
+
+# Other options
+DEBUG	:= -g

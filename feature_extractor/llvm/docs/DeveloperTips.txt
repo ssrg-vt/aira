@@ -1,0 +1,57 @@
+-----------------------------------
+Tips to tweak the feature extractor
+-----------------------------------
+
+Below are tips and how-to's for changing/adding to the feature extractor.
+
+-----------------
+Adding an IR Pass
+-----------------
+
+The IR pass is implemented as a subclass of the FunctionPass class, i.e. it
+iterates through each function in the code.  IR features are implemented as
+subclasses of the IRFeature class, which act as counters.  Each registered
+feature is handed each IR instruction encountered by the pass, which allows each
+individual feature to accumulate statistics from each IR instruction.  Each IR
+feature must implement the following calls:
+
+	clear - reset the statistics about the feature to the default values, readying
+          it for another function
+
+	collect - collect features about the specified IR instruction
+
+	print - print statistics about the collected feature to the passed output
+          stream
+
+To register a new feature with the pass, edit the FunctionIRFeatures
+constructor to add a new feature to the list of features:
+
+	features.push_back(new <new feature>);
+
+------------------
+Adding an AST Pass
+------------------
+
+TODO
+
+------------------------------------------------
+Adding other directories to be built by autoconf
+------------------------------------------------
+
+- To add a top-level directory to the build process, edit "configure".  Add the
+  command to configure the directory:
+
+  ac_config_commands="$ac_config_commands <new directory>"
+
+  You may want to place this near where the other instantiations of this command
+  are placed, e.g.:
+
+  ac_config_commands="$ac_config_commands Makefile"
+  ac_config_commands="$ac_config_commands <new directory>"
+
+
+- To add a directory inside of a folder that is already being built by
+  autoconf, edit the Makefile in that directory so that the "DIRS" variable
+  includes your directory, e.g.:
+
+  DIRS=<new directory>

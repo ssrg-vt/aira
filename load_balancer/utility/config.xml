@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="utf-8"?>
+<queues><numQueues>3</numQueues><0><platform>0</platform><device>0</device><computeUnits>14</computeUnits><maxRunning>1</maxRunning><dynamicPartitioning>false</dynamicPartitioning></0><1><platform>1</platform><device>0</device><computeUnits>4</computeUnits><maxRunning>1</maxRunning><dynamicPartitioning>false</dynamicPartitioning></1><2><platform>1</platform><device>0</device><computeUnits>4</computeUnits><maxRunning>1</maxRunning><dynamicPartitioning>false</dynamicPartitioning></2></queues>
